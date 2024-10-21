@@ -304,7 +304,7 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
     sudo filebeat test config
     ```
 5. ### Sonuç: 
-    Snort sunucusu başarıyla kurulmuş ve ağ trafiğini izlemek üzere yapılandırılmıştır. Loglar, belirli kurallara göre oluşturulacak ve dosyalarda loglanıcaktır. Sonrasında Filebeat ile bu log dosyalarını belirli bir formatta Elasticsearch düğümlerin göndereceğiz.
+    Filebeat'i de başarıyla kurduk ve logları Elasticsearch düğümlerimize ilettik. Böylelikle Kibana Elasticsearc düğümlerine istek atıp veriyi alabilir ve görselleştirebilir.
 
 ## Elastic SIEM Mimarisi
 
