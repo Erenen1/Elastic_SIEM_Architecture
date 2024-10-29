@@ -39,15 +39,20 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
 3. **Elasticsearch yapılandırması**: Elasticsearch yapılandırma dosyasının yolu: ``/etc/elasticsearch/elasticsearch.yml``
     + **Master & Data Düğüm İçin**:
         ```
-        cluster.name: siem_cluster  // İki düğümde de aynı olmalı
+        #İki düğümde de aynı olmalı
+        cluster.name: siem_cluster  
 
-        node.name: "node-1" // Eşsiz olmalı
+        #Eşsiz olmalı
+        node.name: "node-1" 
 
         network.host: 0.0.0.0
         http.port: 9200
 
-        discovery.seed_hosts: ["192.168.1.8","192.168.1.11"] // Cluster içinde bulunan sunucuların ip adresleri
-        cluster.initial_master_nodes: ["node-1"] // Master olacak sunucunun ismi
+        #Cluster içinde bulunan sunucuların ip adresleri
+        discovery.seed_hosts: ["192.168.1.8","192.168.1.11"] 
+
+        #Master olacak sunucunun ismi
+        cluster.initial_master_nodes: ["node-1"]
 
         node.master: true
         node.data: true
@@ -91,8 +96,8 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
     
 6. **Ufw ile Gerekli Portları Açalım**: Ufw ile Elasticsearch için gerekli olan portları açalım. 9200 portu Elasticsearch'ün REST API hizmetini sunduğu port. 9300 portu ise düğümlerin birbirileri arasında gRPC protokolü ile haberleştiği port bu yüzden ikisini de açmamız gerekiyor.
     ```
-        sudo ufw allow 9200/tcp
-        sudo ufw allow 9300/tcp
+    sudo ufw allow 9200/tcp
+    sudo ufw allow 9300/tcp
     ```
 8. **Sonuç**: Elasticsearch sunucuları başarıyla kurulmuş ve yapılandırılmıştır. İki düğümlü bir cluster oluşturulmuştur.
 
@@ -109,9 +114,11 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
         ```
    2. **Kibana Yapılandırması**: Kibana'nın yapılandırma dosyası ``/etc/kibana/kibana.yml`` dosyasındadır.
         ```
-            server.port: 5601
-            server.host: "0.0.0.0"
-            elasticsearch.hosts: ["http://192.168.1.12:9200"] //nginx'in ip adresini girdik. Nginx düğümlere yönlendiricek.
+        server.port: 5601
+        server.host: "0.0.0.0"
+
+        #Nginx'in ip adresini girdik. Nginx düğümlere yönlendiricek.
+        elasticsearch.hosts: ["http://192.168.1.12:9200"]
         ```
    3. **Kibana Servisini Başlatma**: 
         ```
@@ -177,51 +184,51 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
         ```
    3. **Nginx Yapılandırması**: Nginx yapılandırma dosyası ``/etc/nginx/nginx.conf`` altındadır. Ters proxy ve yük dağıtımı yapılandırmasını yapalım.
         ```
-            upstream elasticsearch {
-                server 192.168.1.8:9200; #elasticsearch node1
-                server 192.168.1.11:9200; #elasticsearch node2
+        upstream elasticsearch {
+            server 192.168.1.8:9200; #elasticsearch node1
+            server 192.168.1.11:9200; #elasticsearch node2
+        }
+
+        server {
+            listen 9200;
+
+            location / {
+                proxy_pass http://elasticsearch;  //yukarıda tanımladığımız upstream
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
             }
+        }
 
-            server {
-                listen 9200;
+        server {
+            listen 80;
 
-                location / {
-                    proxy_pass http://elasticsearch;  //yukarıda tanımladığımız upstream
-                    proxy_set_header Host $host;
-                    proxy_set_header X-Real-IP $remote_addr;
-                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto $scheme;
-                }
+            location / {
+                proxy_pass http://192.168.1.13:5601;  //kibana'nın çalıştığı sunucu ip adresi ve portu
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
             }
+        }
 
-            server {
-                listen 80;
+        server {
+            listen 443 ssl;
 
-                location / {
-                    proxy_pass http://192.168.1.13:5601;  //kibana'nın çalıştığı sunucu ip adresi ve portu
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection 'upgrade';
-                    proxy_set_header Host $host;
-                    proxy_cache_bypass $http_upgrade;
-                }
+            ssl_certificate /etc/nginx/certs/fullchain.pem;
+            ssl_certificate_key /etc/nginx/certs/privkey.pem;
+
+            location / {
+                proxy_pass https://192.168.1.13:5601;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
             }
-
-            server {
-                listen 443 ssl;
-
-                ssl_certificate /etc/nginx/certs/fullchain.pem;
-                ssl_certificate_key /etc/nginx/certs/privkey.pem;
-
-                location / {
-                    proxy_pass https://192.168.1.13:5601;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection 'upgrade';
-                    proxy_set_header Host $host;
-                    proxy_cache_bypass $http_upgrade;
-                }
-            }
+        }
         ```
     4. **nginx.conf Dosyasını Test edelim**:
         ```
@@ -278,7 +285,8 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
                 log_type: nginx_access
             fields_under_root: true
 
-            index: "nginx-access-logs-%{+yyyy.MM.dd}"  // buradaki nginx erişim log yapılandırması nginx sunucusunun içinde
+            #buradaki nginx erişim log yapılandırması nginx sunucusunun içinde
+            index: "nginx-access-logs-%{+yyyy.MM.dd}"  
             - type: log
                 enabled: true
                 paths:
@@ -304,7 +312,78 @@ Bu sunucu, log verilerinin indekslenmesi ve depolanması için kullanılır. Pro
     sudo filebeat test config
     ```
 5. ### Sonuç: 
-    Filebeat'i de başarıyla kurduk ve logları Elasticsearch düğümlerimize ilettik. Böylelikle Kibana Elasticsearc düğümlerine istek atıp veriyi alabilir ve görselleştirebilir.
+    Filebeat yazılımımızı da başarıyla kurduk. Filebeat ile loglanan verilerimizi Elasticsearch düğümlerine başarıyla gönderdik. Kibana Elasticsearch düğümlerine istek atarak veriyi çekebilecek. Kibana üzerinden log verilerimizi analiz edip izleyebileceğiz.
+
+
+## Sunucular arası güvenli iletişim için UFW kuralları
+Sunucular arasında yalnızca belirli IP adreslerinden gelen bağlantılara izin vermek için UFW’yi kullanarak erişimleri yapılandıracağız.
+### Elasticsearch düğümlerin çalıştığı sunucular için
+1. **node-1 için (192.168.1.8)**: Elasticsearch node-1'in çalıştığı sunucu sadece node-2 ve nginx ile iletişim halinde olmalı.
+    ```
+    #diğer düğümden gelen trafiğe izin verdik
+    sudo ufw allow from 192.168.1.11 to any port 9300 
+
+    #nginx'ten gelen istekler icin
+    sudo ufw allow from 192.168.1.12 to any port 9200
+
+    #yukaridakiler haric iletisim kapali
+    sudo ufw default deny incoming  
+
+    #diğer düğümle giden trafiğe izin verdik
+    sudo ufw allow out to 192.168.1.11 port 9300
+
+    #nginx'in bulundugu sunucuya giden trafiğe izin verdik
+    sudo ufw allow out to 192.168.1.12 port 9200
+
+    #yukarıdaki kurallar haric dışarı trafiğe çıkamayız.
+    sudo ufw default deny outgoing
+    ```
+2. **node-2 için (192.168.1.11)**: Elasticsearch node-2'in çalıştığı sunucu sadece node-1 ve nginx ile iletişim halinde olmalı.
+    ```
+    sudo ufw allow from 192.168.1.8 to any port 9300
+    sudo ufw allow from 192.168.1.12 to any port 9200
+    sudo ufw default deny incoming  
+
+    sudo ufw allow out to 192.168.1.8 port 9300
+    sudo ufw allow out to 192.168.1.12 port 9200
+    sudo ufw default deny outgoing
+    ```
+### Kibana'nın çalıştığı sunucu (192.168.1.13) için
+Kibana'nın bulunduğu sunucu nginx ile iletişim halinde olmalı. Sadece nginx üzerinden gelen ve giden trafiklere izin vermeliyiz.
+```
+#nginx'ten gelen trafik icin
+sudo ufw allow from 192.168.1.12 to any port 5601
+sudo ufw default deny incoming
+
+#nginx'e giden trafik için
+sudo ufw allow out to 192.168.1.12 port 80
+sudo ufw allow out to 192.168.1.12 port 443
+sudo ufw default deny outgoing
+```
+### Snort'un çalıştığı sunucu (192.168.1.9) için
+Snort'un çalıştığı sunucu logları nginx üzerinden elasticsearch düğümlerine göndereceği için nginx'in bulunduğu sunucu ile iletişim halinde olması lazım.
+```
+#Bu sunucuya gelen trafik yok.
+sudo ufw default deny incoming
+
+#nginx'e giden trafik için
+sudo ufw allow out to 192.168.1.12 port 9200
+sudo ufw default deny outgoing
+```
+### Nginx'in çalıştığı sunucu (192.168.1.12) için
+Nginx'in çalıştığı sunucu network içerisinde elasticsearch düğümleri ve kibana ile iletişim halinde.
+```
+#80 ve 443 portuna tam erişim, 9200 portuna sadece aynı ağda bulunan cihazlardan erişim veriyoruz.
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from 192.168.1.0/24 to any port 9200
+
+#giden trafik
+sudo ufw allow out to 192.168.1.8 port 9200
+sudo ufw allow out to 192.168.1.11 port 9200
+sudo ufw allow out to 192.168.1.13 port 5601
+sudo ufw default deny outgoing
+```
 
 ## Elastic SIEM Mimarisi
 
